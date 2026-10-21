@@ -1,3 +1,4 @@
+
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -15,6 +16,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import hospitalRoutes from './routes/hospitalRoutes.js';
 
 // Connect to MongoDB
+
 connectDB();
 
 const app = express();
