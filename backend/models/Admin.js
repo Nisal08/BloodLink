@@ -8,5 +8,5 @@ const adminSchema = new mongoose.Schema({
   },
 });
 
-const Admin = User.discriminator('Admin', adminSchema);
+const Admin = User.discriminator('Admin', adminSchema, 'admin');
 export default Admin;
