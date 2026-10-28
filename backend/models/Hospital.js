@@ -97,5 +97,5 @@ const hospitalSchema = new mongoose.Schema({
   },
 });
 
-const Hospital = User.discriminator('Hospital', hospitalSchema);
+const Hospital = User.discriminator('Hospital', hospitalSchema, 'hospital');
 export default Hospital;

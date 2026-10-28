@@ -88,5 +88,5 @@ donorSchema.methods.isEligible = function () {
   return new Date() >= this.nextEligibleDate;
 };
 
-const Donor = User.discriminator('Donor', donorSchema);
+const Donor = User.discriminator('Donor', donorSchema, 'donor');
 export default Donor;

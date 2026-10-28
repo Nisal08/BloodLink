@@ -38,5 +38,5 @@ const requesterSchema = new mongoose.Schema({
   },
 });
 
-const Requester = User.discriminator('Requester', requesterSchema);
+const Requester = User.discriminator('Requester', requesterSchema, 'requester');
 export default Requester;
