@@ -9,6 +9,8 @@ interface User {
   role: string;
   bloodType?: string;
   phone?: string;
+  organizationName?: string;
+  city?: string;
 }
 
 interface AuthContextType {

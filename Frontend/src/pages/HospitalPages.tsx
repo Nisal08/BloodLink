@@ -1,6 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 import DashboardSidebar from '../components/DashboardSidebar';
+import { createRequest, generateReport, getProfile } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 /* ─── shared shell ─────────────────────────────────────────────────────── */
 function Shell({ title, subtitle, children, actions }: {
@@ -242,10 +244,41 @@ export function HospitalProfile() {
    CREATE REQUEST
 ═══════════════════════════════════════════════════════════════════════════ */
 export function HospitalCreateRequest() {
+  const { user: profile } = useAuth();
   const [isEmergency, setIsEmergency] = useState(false);
   const [bloodType, setBloodType] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [units, setUnits] = useState(1);
+  const [department, setDepartment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const submitHospitalRequest = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError('');
+    if (!bloodType || units < 1) {
+      setError('Choose a blood type and at least one unit.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const hospitalProfile = profile?.organizationName ? profile : (await getProfile()).data.data;
+      await createRequest({
+        bloodType,
+        units: String(units),
+        urgency: isEmergency ? 'Emergency' : 'Normal',
+        hospitalName: hospitalProfile.organizationName ?? '',
+        hospitalCity: hospitalProfile.city ?? '',
+        isEmergency: String(isEmergency),
+        department,
+      });
+      setSubmitted(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request could not be created.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const bloodTypes = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
   const urgencyColors: Record<string, string> = { 'A+':'#00B4FF','A-':'#7B2FFF','B+':'#00E5A0','B-':'#FF7B00','AB+':'#7B2FFF','AB-':'#00B4FF','O+':'#00E5A0','O-':'#FF0040' };
@@ -276,6 +309,7 @@ export function HospitalCreateRequest() {
       }>
 
       {/* Emergency toggle — always prominent */}
+      <form onSubmit={submitHospitalRequest}>
       <div className={`rounded-2xl p-5 mb-6 border-2 transition-all ${isEmergency ? 'border-[#FF0040] bg-[#FF0040]/5' : 'border-[var(--border)] bg-white'}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -287,7 +321,7 @@ export function HospitalCreateRequest() {
               <p className="text-xs text-[var(--muted-foreground)]">{isEmergency ? 'This request will be pinned to the top of the board and donors alerted immediately.' : 'Toggle on for life-critical, immediate-need requests.'}</p>
             </div>
           </div>
-          <button onClick={() => setIsEmergency(!isEmergency)}
+          <button type="button" onClick={() => setIsEmergency(!isEmergency)}
             className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors shrink-0 ${isEmergency ? 'bg-[#FF0040]' : 'bg-gray-200'}`}>
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isEmergency ? 'translate-x-8' : 'translate-x-1'}`} />
           </button>
@@ -304,7 +338,7 @@ export function HospitalCreateRequest() {
                 const color = urgencyColors[t];
                 const sel = bloodType === t;
                 return (
-                  <button key={t} onClick={() => setBloodType(t)}
+                  <button type="button" key={t} onClick={() => setBloodType(t)}
                     className={`h-16 rounded-2xl font-display font-black text-xl border-2 transition-all ${sel ? 'text-white shadow-lg scale-105' : 'border-[var(--border)] text-[#00032B] hover:border-current'}`}
                     style={sel ? { background: color, borderColor: color, boxShadow: `0 8px 24px ${color}40` } : { color }}>
                     {t}
@@ -322,26 +356,26 @@ export function HospitalCreateRequest() {
               <div>
                 <label className="block text-xs font-semibold text-[#00032B] uppercase tracking-wide mb-1.5">Units Required <span className="text-[#FF0040]">*</span></label>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setUnits(Math.max(1, units - 1))}
+                  <button type="button" onClick={() => setUnits(Math.max(1, units - 1))}
                     className="w-10 h-10 rounded-xl bg-[var(--muted)] font-bold text-lg hover:bg-[#FF0040] hover:text-white transition-colors">−</button>
                   <input type="number" value={units} min={1} max={20}
                     onChange={e => setUnits(Math.max(1, Math.min(20, Number(e.target.value))))}
                     className="w-20 text-center border-2 border-[var(--border)] rounded-xl py-2.5 text-lg font-bold focus:outline-none focus:border-[#FF0040] transition-colors" />
-                  <button onClick={() => setUnits(Math.min(20, units + 1))}
+                  <button type="button" onClick={() => setUnits(Math.min(20, units + 1))}
                     className="w-10 h-10 rounded-xl bg-[var(--muted)] font-bold text-lg hover:bg-[#FF0040] hover:text-white transition-colors">+</button>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-[#00032B] uppercase tracking-wide mb-1.5">Urgency Level <span className="text-[#FF0040]">*</span></label>
-                <select defaultValue={isEmergency ? 'Emergency' : 'Normal'} className="w-full border-2 border-[var(--border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#FF0040] transition-colors bg-white">
-                  <option>Normal</option><option>High</option><option>Emergency</option>
+                <select value={isEmergency ? 'Emergency' : 'Normal'} onChange={e => setIsEmergency(e.target.value === 'Emergency')} className="w-full border-2 border-[var(--border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#FF0040] transition-colors bg-white">
+                  <option>Normal</option><option>Emergency</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-[#00032B] uppercase tracking-wide mb-1.5">Department</label>
-                <select defaultValue="" className="w-full border-2 border-[var(--border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#FF0040] transition-colors bg-white">
+                <select value={department} onChange={e => setDepartment(e.target.value)} className="w-full border-2 border-[var(--border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#FF0040] transition-colors bg-white">
                   <option value="">Select department</option>
                   <option>Emergency Medicine</option><option>Cardiology</option><option>Oncology</option>
                   <option>Neurology</option><option>Trauma Surgery</option><option>ICU / Critical Care</option>
@@ -434,12 +468,14 @@ export function HospitalCreateRequest() {
             ))}
           </div>
 
-          <button onClick={() => bloodType && setSubmitted(true)}
-            className={`w-full py-4 rounded-2xl font-display font-bold text-lg transition-all ${bloodType ? (isEmergency ? 'bg-[#FF0040] text-white hover:bg-[#cc0033] shadow-lg' : 'bg-[#00032B] text-white hover:bg-[#FF0040]') : 'bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed'}`}>
-            {isEmergency ? '🚨 Post Emergency Request' : 'Post Blood Request'} →
+          {error && <p role="alert" className="text-sm text-[#FF0040] mb-3">{error}</p>}
+          <button type="submit" disabled={saving || !bloodType}
+            className={`w-full py-4 rounded-2xl font-display font-bold text-lg transition-all ${bloodType && !saving ? (isEmergency ? 'bg-[#FF0040] text-white hover:bg-[#cc0033] shadow-lg' : 'bg-[#00032B] text-white hover:bg-[#FF0040]') : 'bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed'}`}>
+            {saving ? 'Submitting...' : `${isEmergency ? '🚨 Post Emergency Request' : 'Post Blood Request'} →`}
           </button>
         </div>
       </div>
+      </form>
     </Shell>
   );
 }
@@ -862,8 +898,33 @@ export function HospitalReports() {
   });
   const [generated, setGenerated] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState('');
+  const [reportData, setReportData] = useState<{
+    reportId?: string;
+    generatedAt?: string;
+    summary?: {
+      totalRequests?: number;
+      donationsMade?: number;
+      emergencyCases?: number;
+      fulfillmentRate?: number;
+    };
+  } | null>(null);
 
   const toggle = (k: keyof typeof sections) => setSections(p => ({ ...p, [k]: !p[k] }));
+  const handleGenerateReport = async () => {
+    setError('');
+    setGenerating(true);
+    try {
+      const res = await generateReport({ fromDate, toDate, sections });
+      setReportData(res.data.data);
+      setGenerated(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Report could not be generated.');
+    } finally {
+      setGenerating(false);
+    }
+  };
   const handleDownload = () => {
     setDownloading(true);
     setTimeout(() => setDownloading(false), 2000);
@@ -940,10 +1001,11 @@ export function HospitalReports() {
             ))}
           </div>
 
-          <button onClick={() => setGenerated(true)}
-            className="mt-6 w-full bg-[#FF0040] text-white py-3.5 rounded-xl font-display font-bold hover:bg-[#cc0033] transition-all">
-            Generate Report →
+          <button onClick={handleGenerateReport} disabled={generating}
+            className="mt-6 w-full bg-[#FF0040] text-white py-3.5 rounded-xl font-display font-bold hover:bg-[#cc0033] transition-all disabled:opacity-60">
+            {generating ? 'Generating...' : 'Generate Report →'}
           </button>
+          {error && <p role="alert" className="mt-3 text-sm text-[#FF0040]">{error}</p>}
         </div>
 
         {/* Quick stats preview */}
@@ -985,11 +1047,11 @@ export function HospitalReports() {
               <div>
                 <p className="font-mono-label text-xs text-white/40 uppercase tracking-widest mb-1">BloodLink Official Report</p>
                 <h2 className="font-display text-2xl font-black">City General Hospital</h2>
-                <p className="text-white/55 text-sm mt-1">{fromDate} to {toDate} · Generated Sept 21, 2026</p>
+                <p className="text-white/55 text-sm mt-1">{fromDate} to {toDate} · Generated {reportData?.generatedAt ? new Date(reportData.generatedAt).toLocaleString() : 'just now'}</p>
               </div>
               <div className="text-right">
                 <p className="font-mono-label text-xs text-white/40">Report ID</p>
-                <p className="font-mono-label text-sm text-white">RPT-2026-0921-CGH</p>
+                <p className="font-mono-label text-sm text-white">{reportData?.reportId ?? 'Hospital report'}</p>
               </div>
             </div>
           </div>
