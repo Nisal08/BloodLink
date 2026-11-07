@@ -1,30 +1,64 @@
 import { Link, useLocation } from 'react-router';
+import { useEffect, useState } from 'react';
 import DashboardSidebar from '../components/DashboardSidebar';
+import { useAuth } from '../context/AuthContext';
+import { getActiveRequests, getHospitalStats, getProfile } from '../services/api';
 
-const stats = [
-  { label: 'Active Requests', value: '7', icon: '◆', from: '#FF0040', to: '#ff4d6d' },
-  { label: 'Donors Contacted', value: '34', icon: '◉', from: '#00B4FF', to: '#4dd1ff' },
-  { label: 'Fulfilled / Month', value: '19', icon: '◈', from: '#00E5A0', to: '#4dffc6' },
-  { label: 'Emergency Alerts', value: '2', icon: '◎', from: '#FF7B00', to: '#ffac4d' },
-];
-
-const activeRequests = [
-  { id: 1, type: 'O-', patient: 'ICU Patient A', units: 3, urgency: 'Emergency', donors: 2, status: 'In Progress', color: '#FF0040' },
-  { id: 2, type: 'AB+', patient: 'Surgery Patient B', units: 2, urgency: 'High', donors: 0, status: 'Pending', color: '#7B2FFF' },
-  { id: 3, type: 'B+', patient: 'Trauma Patient C', units: 5, urgency: 'Emergency', donors: 4, status: 'In Progress', color: '#FF0040' },
-];
+type HospitalStats = {
+  activeRequests: number; donorsContacted: number; fulfilledThisMonth: number;
+  emergencyAlerts: number;
+  bloodBank?: { inventory: Array<{ bloodType: string; units: number; maxUnits: number }> };
+};
+type HospitalRequest = {
+  _id: string; bloodType: string; hospitalName: string; hospitalCity?: string;
+  units: number; urgency: string; status: string; createdAt: string;
+  matchedDonors?: unknown[];
+};
 
 export default function HospitalDashboard() {
   const location = useLocation();
+  const { user } = useAuth();
+  const [stats, setStats] = useState<HospitalStats | null>(null);
+  const [activeRequests, setActiveRequests] = useState<HospitalRequest[]>([]);
+  const [profileName, setProfileName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    Promise.all([getHospitalStats(), getActiveRequests({ page: '1', limit: '5' })])
+      .then(([statsResponse, requestsResponse]) => {
+        setStats(statsResponse.data.data);
+        setActiveRequests(requestsResponse.data.data);
+      })
+      .catch(() => setError('Could not load hospital data. Please retry.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!user?.organizationName) {
+      getProfile()
+        .then(response => setProfileName(response.data.data.organizationName ?? ''))
+        .catch(() => setProfileName(''));
+    }
+  }, [user?.organizationName]);
+
+  const hospitalName = user?.organizationName || profileName || 'Hospital';
+  const statCards = [
+    { label: 'Active Requests', value: stats?.activeRequests ?? 0, icon: '◆', from: '#FF0040', to: '#ff4d6d' },
+    { label: 'Donors Contacted', value: stats?.donorsContacted ?? 0, icon: '◉', from: '#00B4FF', to: '#4dd1ff' },
+    { label: 'Fulfilled / Month', value: stats?.fulfilledThisMonth ?? 0, icon: '◈', from: '#00E5A0', to: '#4dffc6' },
+    { label: 'Emergency Alerts', value: stats?.emergencyAlerts ?? 0, icon: '◎', from: '#FF7B00', to: '#ffac4d' },
+  ];
+
   return (
     <div className="flex min-h-screen bg-[var(--background)]">
-      <DashboardSidebar role="hospital" userName="City General" activePath={location.pathname} />
+      <DashboardSidebar role="hospital" userName={hospitalName} activePath={location.pathname} />
 
       <div className="flex-1 overflow-auto">
         <div className="bg-white border-b border-[var(--border)] px-8 py-5 sticky top-0 z-10 flex items-center justify-between">
           <div>
             <p className="font-mono-label text-xs text-[var(--muted-foreground)] uppercase tracking-widest">Hospital</p>
-            <h1 className="font-display text-xl font-black text-[#00032B]">City General Hospital</h1>
+            <h1 className="font-display text-xl font-black text-[#00032B]">{hospitalName}</h1>
           </div>
           <div className="flex gap-3">
             <Link to="/find-donors" className="text-sm border-2 border-[var(--border)] px-4 py-2 rounded-xl font-semibold hover:border-[#00032B] hover:text-[#00032B] transition-colors">◍ Find Donors</Link>
@@ -35,8 +69,11 @@ export default function HospitalDashboard() {
         </div>
 
         <div className="p-8">
+          {loading && <p role="status" className="mb-5 text-sm text-[var(--muted-foreground)]">Loading hospital data...</p>}
+          {error && <p role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {stats.map(s => (
+            {statCards.map(s => (
               <div key={s.label} className="bg-white rounded-2xl border border-[var(--border)] p-5">
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-mono-label text-lg mb-4 text-white"
                   style={{ background: `linear-gradient(135deg, ${s.from}, ${s.to})` }}>
@@ -55,15 +92,18 @@ export default function HospitalDashboard() {
                 <Link to="/dashboard/hospital/active-requests" className="text-xs font-semibold text-[#FF0040]">View all →</Link>
               </div>
               <div className="divide-y divide-[var(--border)]">
+                {!loading && !error && activeRequests.length === 0 && (
+                  <p className="px-6 py-8 text-sm text-[var(--muted-foreground)]">No active blood requests.</p>
+                )}
                 {activeRequests.map(req => (
-                  <div key={req.id} className="flex items-center gap-4 px-6 py-4 hover:bg-[var(--background)] transition-colors flex-wrap">
+                  <div key={req._id} className="flex items-center gap-4 px-6 py-4 hover:bg-[var(--background)] transition-colors flex-wrap">
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center font-display font-black text-base text-white shrink-0"
-                      style={{ background: req.color }}>
-                      {req.type}
+                      style={{ background: req.urgency === 'Emergency' ? '#FF0040' : '#7B2FFF' }}>
+                      {req.bloodType}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-[#00032B]">{req.patient}</p>
-                      <p className="text-xs font-mono-label text-[var(--muted-foreground)]">{req.units} units needed · {req.donors} donors responding</p>
+                      <p className="font-semibold text-sm text-[#00032B]">{req.hospitalName}{req.hospitalCity ? ` · ${req.hospitalCity}` : ''}</p>
+                      <p className="text-xs font-mono-label text-[var(--muted-foreground)]">{req.units} units needed · {req.matchedDonors?.length ?? 0} donors responding</p>
                     </div>
                     <span className={`text-xs px-2.5 py-1 rounded-full font-bold shrink-0 text-white ${req.urgency === 'Emergency' ? 'bg-[#FF0040]' : 'bg-orange-500'}`}>{req.urgency}</span>
                     <span className={`text-xs px-2.5 py-1 rounded-full font-semibold shrink-0 ${req.status === 'In Progress' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{req.status}</span>

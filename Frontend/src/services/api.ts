@@ -52,7 +52,8 @@ export const markAllAsRead = () => API.put('/notifications/read-all');
 export const getHospitalStats = () => API.get('/hospitals/stats/dashboard');
 export const getActiveRequests = (params?: Record<string, string>) => API.get('/hospitals/active-requests', { params });
 export const getHistory = (params?: Record<string, string>) => API.get('/hospitals/history', { params });
-export const generateReport = (data: Record<string, string>) => API.post('/hospitals/reports/generate', data);
+export const generateReport = (data: { fromDate: string; toDate: string; sections: Record<string, boolean> }) =>
+  API.post('/hospitals/reports/generate', data);
 
 // Admin
 export const getAdminStats = () => API.get('/admin/stats');

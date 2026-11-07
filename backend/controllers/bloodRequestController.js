@@ -23,6 +23,8 @@ export const createRequest = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Hospital name is required' });
     }
 
+    const emergencyRequested = isEmergency === true || isEmergency === 'true';
+
     // For hospital role, use their own info
     const finalHospitalName = req.user.role === 'hospital'
       ? (hospitalName || req.user.organizationName)
@@ -33,7 +35,7 @@ export const createRequest = async (req, res, next) => {
       creatorRole: req.user.role,
       bloodType,
       units: units || 1,
-      urgency: isEmergency ? 'Emergency' : (urgency || 'Normal'),
+      urgency: emergencyRequested ? 'Emergency' : (urgency || 'Normal'),
       hospitalName: finalHospitalName,
       hospitalCity: hospitalCity || req.user.city,
       patientInfo: patientInfo || {},
